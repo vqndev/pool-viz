@@ -1,5 +1,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { Line2 } from 'three/addons/lines/Line2.js'
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js'
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 
 // === Constants ===
 const BALL_RADIUS = 1.125
@@ -22,10 +25,10 @@ const tableWidth = 30
 const tableLength = 40
 
 // === Lighting ===
-scene.add(new THREE.AmbientLight(0xffffff, 0.8))
+scene.add(new THREE.AmbientLight(0xffffff, 1.2))
 
 // Main overhead pool hall lamp
-const mainLight = new THREE.SpotLight(0xffe4b5, 10, 60, Math.PI / 4, 0.6, 1.2)
+const mainLight = new THREE.SpotLight(0xffe4b5, 15, 80, Math.PI / 3, 0.5, 1.0)
 mainLight.position.set(0, 14, -5)
 mainLight.target.position.set(0, 0, -5)
 mainLight.castShadow = true
@@ -33,7 +36,7 @@ scene.add(mainLight)
 scene.add(mainLight.target)
 
 // Second spot from the other side
-const secondSpot = new THREE.SpotLight(0xfff0d0, 5, 50, Math.PI / 5, 0.7, 1.2)
+const secondSpot = new THREE.SpotLight(0xfff0d0, 10, 60, Math.PI / 4, 0.5, 1.0)
 secondSpot.position.set(-5, 12, 5)
 secondSpot.target.position.set(3, 0, -8)
 scene.add(secondSpot)
@@ -96,14 +99,14 @@ scene.add(objectBall)
 // === Ghost Ball (fixed) ===
 const ghostBall = new THREE.Mesh(
   new THREE.SphereGeometry(BALL_RADIUS, 32, 32),
-  new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, roughness: 0.1, depthWrite: false })
+  new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.175, roughness: 0.1, depthWrite: false })
 )
 ghostBall.position.copy(ghostBallPos)
 scene.add(ghostBall)
 
 const ghostWire = new THREE.Mesh(
   new THREE.SphereGeometry(BALL_RADIUS * 1.005, 16, 16),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.3 })
+  new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.2 })
 )
 ghostWire.position.copy(ghostBallPos)
 scene.add(ghostWire)
@@ -130,23 +133,26 @@ const perpDir = new THREE.Vector3().crossVectors(objToPocket, new THREE.Vector3(
 // "Left side" means opposite side from where cue ball approaches
 let currentSign = 1 // will be set in setCutAngle
 
-const refLineMat = new THREE.LineBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.5 })
-const refLineGeo = new THREE.BufferGeometry()
-const refLine = new THREE.Line(refLineGeo, refLineMat)
+const refLineMat = new LineMaterial({ color: 0xff4444, linewidth: 3, transparent: true, opacity: 0.5, resolution: new THREE.Vector2(window.innerWidth, window.innerHeight) })
+const refLineGeo = new LineGeometry()
+refLineGeo.setPositions([0, 0, 0, 1, 0, 0]) // placeholder
+const refLine = new Line2(refLineGeo, refLineMat)
 scene.add(refLine)
 
 // === Reference Spot ===
 const refSpot = new THREE.Mesh(
   new THREE.SphereGeometry(0.075, 16, 16),
-  new THREE.MeshBasicMaterial({ color: 0xff4444 })
+  new THREE.MeshBasicMaterial({ color: 0x4488ff })
 )
+refSpot.visible = false
 scene.add(refSpot)
 
 // === Ghost Ref Spot ===
 const ghostRefSpot = new THREE.Mesh(
   new THREE.SphereGeometry(0.075, 16, 16),
-  new THREE.MeshBasicMaterial({ color: 0xff4444 })
+  new THREE.MeshBasicMaterial({ color: 0x4488ff })
 )
+ghostRefSpot.visible = false
 scene.add(ghostRefSpot)
 
 // === Controls ===
@@ -181,10 +187,7 @@ function setCutAngle(deg) {
   // Update reference line geometry
   const rStart = objectBallPos.clone().add(refOffset).add(objToPocket.clone().multiplyScalar(-40))
   const rEnd = objectBallPos.clone().add(refOffset).add(objToPocket.clone().multiplyScalar(40))
-  refLineGeo.setFromPoints([
-    new THREE.Vector3(rStart.x, BALL_RADIUS, rStart.z),
-    new THREE.Vector3(rEnd.x, BALL_RADIUS, rEnd.z),
-  ])
+  refLineGeo.setPositions([rStart.x, BALL_RADIUS, rStart.z, rEnd.x, BALL_RADIUS, rEnd.z])
 
   // Update reference spot
   const refOffsetDist = BALL_RADIUS * 0.5
@@ -272,9 +275,29 @@ function updateAngleBtnStyles() {
 }
 updateAngleBtnStyles()
 
+// === Ghost Ball Toggle ===
+const ghostBallBtn = document.createElement('button')
+ghostBallBtn.textContent = 'Ghost Ball: ON'
+Object.assign(ghostBallBtn.style, {
+  ...btnStyle,
+  position: 'fixed',
+  bottom: '270px',
+  right: '20px',
+})
+document.body.appendChild(ghostBallBtn)
+
+ghostBallBtn.addEventListener('click', () => {
+  const on = !ghostBall.visible
+  ghostBall.visible = on
+  ghostWire.visible = on
+  ghostBallBtn.textContent = `Ghost Ball: ${on ? 'ON' : 'OFF'}`
+  ghostBallBtn.style.opacity = on ? '1' : '0.5'
+})
+
 // === Ghost Ref Spot Toggle ===
 const ghostRefSpotBtn = document.createElement('button')
-ghostRefSpotBtn.textContent = 'Ghost Spot: ON'
+ghostRefSpotBtn.textContent = 'Ghost Spot: OFF'
+ghostRefSpotBtn.style.opacity = '0.5'
 Object.assign(ghostRefSpotBtn.style, {
   ...btnStyle,
   position: 'fixed',
@@ -291,7 +314,8 @@ ghostRefSpotBtn.addEventListener('click', () => {
 
 // === Reference Spot Toggle ===
 const refSpotBtn = document.createElement('button')
-refSpotBtn.textContent = 'Ref Spot: ON'
+refSpotBtn.textContent = 'Ref Spot: OFF'
+refSpotBtn.style.opacity = '0.5'
 Object.assign(refSpotBtn.style, {
   ...btnStyle,
   position: 'fixed',
@@ -381,4 +405,5 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
   renderer.setSize(window.innerWidth, window.innerHeight)
+  refLineMat.resolution.set(window.innerWidth, window.innerHeight)
 })
