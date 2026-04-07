@@ -1,0 +1,360 @@
+import * as THREE from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+
+// === Constants ===
+const BALL_RADIUS = 1.125
+const POCKET_RADIUS = 2.25
+
+// === Scene Setup ===
+const scene = new THREE.Scene()
+scene.background = new THREE.Color(0x1a1a2e)
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 500)
+const renderer = new THREE.WebGLRenderer({ antialias: true })
+renderer.setSize(window.innerWidth, window.innerHeight)
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+document.body.appendChild(renderer.domElement)
+
+// === Lighting ===
+scene.add(new THREE.AmbientLight(0xffffff, 0.6))
+const overheadLight = new THREE.PointLight(0xffffff, 1.2, 200)
+overheadLight.position.set(0, 30, 0)
+scene.add(overheadLight)
+
+// === Table Surface ===
+const tableWidth = 30
+const tableLength = 40
+const table = new THREE.Mesh(
+  new THREE.PlaneGeometry(tableWidth, tableLength),
+  new THREE.MeshStandardMaterial({ color: 0x0d6b3d })
+)
+table.rotation.x = -Math.PI / 2
+scene.add(table)
+
+// === Cushions ===
+const cushionHeight = 1.5
+const cushionDepth = 1.5
+const cushionMat = new THREE.MeshStandardMaterial({ color: 0x0a5c2f })
+
+const sideCushion = new THREE.Mesh(new THREE.BoxGeometry(tableWidth, cushionHeight, cushionDepth), cushionMat)
+sideCushion.position.set(0, cushionHeight / 2, -tableLength / 2)
+scene.add(sideCushion)
+
+const endCushion = new THREE.Mesh(new THREE.BoxGeometry(cushionDepth, cushionHeight, tableLength), cushionMat)
+endCushion.position.set(tableWidth / 2, cushionHeight / 2, 0)
+scene.add(endCushion)
+
+// === Pocket ===
+const pocketMesh = new THREE.Mesh(
+  new THREE.CircleGeometry(POCKET_RADIUS, 32),
+  new THREE.MeshBasicMaterial({ color: 0x111111 })
+)
+pocketMesh.rotation.x = -Math.PI / 2
+pocketMesh.position.set(tableWidth / 2 - 1, 0.01, -tableLength / 2 + 1)
+scene.add(pocketMesh)
+
+// === Fixed positions ===
+const objBallDistFromPocket = 12
+const pocketPos = new THREE.Vector3(tableWidth / 2 - 1, BALL_RADIUS, -tableLength / 2 + 1)
+const pocketToTableDir = new THREE.Vector3(-1, 0, 1).normalize()
+const objectBallPos = pocketPos.clone().add(pocketToTableDir.clone().multiplyScalar(objBallDistFromPocket))
+const pocketToObj = objectBallPos.clone().sub(pocketPos).normalize()
+const ghostBallPos = objectBallPos.clone().add(pocketToObj.clone().multiplyScalar(BALL_RADIUS * 2))
+const objToPocket = pocketPos.clone().sub(objectBallPos).normalize()
+
+// === Object Ball (fixed) ===
+const objectBall = new THREE.Mesh(
+  new THREE.SphereGeometry(BALL_RADIUS, 32, 32),
+  new THREE.MeshStandardMaterial({ color: 0xf5c518, roughness: 0.3, metalness: 0.1 })
+)
+objectBall.position.copy(objectBallPos)
+scene.add(objectBall)
+
+// === Ghost Ball (fixed) ===
+const ghostBall = new THREE.Mesh(
+  new THREE.SphereGeometry(BALL_RADIUS, 32, 32),
+  new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, roughness: 0.1, depthWrite: false })
+)
+ghostBall.position.copy(ghostBallPos)
+scene.add(ghostBall)
+
+const ghostWire = new THREE.Mesh(
+  new THREE.SphereGeometry(BALL_RADIUS * 1.005, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.3 })
+)
+ghostWire.position.copy(ghostBallPos)
+scene.add(ghostWire)
+
+// === Cue Ball (moves with angle) ===
+const cueBall = new THREE.Mesh(
+  new THREE.SphereGeometry(BALL_RADIUS, 32, 32),
+  new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.2, metalness: 0.05 })
+)
+scene.add(cueBall)
+
+// === Pocket Line (fixed - object ball to pocket) ===
+const pocketLineGeo = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(objectBallPos.x + objToPocket.x * -40, BALL_RADIUS, objectBallPos.z + objToPocket.z * -40),
+  new THREE.Vector3(objectBallPos.x + objToPocket.x * 40, BALL_RADIUS, objectBallPos.z + objToPocket.z * 40),
+])
+const pocketLine = new THREE.Line(pocketLineGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }))
+scene.add(pocketLine)
+
+// === Reference Line (fixed - parallel to pocket line, offset left) ===
+const perpDir = new THREE.Vector3().crossVectors(objToPocket, new THREE.Vector3(0, 1, 0)).normalize()
+// We'll compute the sign once based on a default angle and keep it consistent
+// "Left side" means opposite side from where cue ball approaches
+let currentSign = 1 // will be set in setCutAngle
+
+const refLineMat = new THREE.LineBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.5 })
+const refLineGeo = new THREE.BufferGeometry()
+const refLine = new THREE.Line(refLineGeo, refLineMat)
+scene.add(refLine)
+
+// === Reference Spot ===
+const refSpot = new THREE.Mesh(
+  new THREE.SphereGeometry(0.075, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xff4444 })
+)
+scene.add(refSpot)
+
+// === Ghost Ref Spot ===
+const ghostRefSpot = new THREE.Mesh(
+  new THREE.SphereGeometry(0.075, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xff4444 })
+)
+scene.add(ghostRefSpot)
+
+// === Controls ===
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.enableDamping = true
+controls.dampingFactor = 0.08
+controls.minDistance = 3
+controls.maxDistance = 60
+controls.maxPolarAngle = Math.PI / 2 - 0.05
+
+// === Current state ===
+let currentAngle = 30
+const cueBallDist = 15
+const defaultCamPos = new THREE.Vector3()
+const defaultTarget = ghostBallPos.clone()
+
+function setCutAngle(deg) {
+  currentAngle = deg
+  const cutAngleRad = (deg * Math.PI) / 180
+
+  // Cue ball position
+  const cueApproachDir = pocketToObj.clone()
+  cueApproachDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), cutAngleRad)
+  const cueBallPos = ghostBallPos.clone().add(cueApproachDir.clone().multiplyScalar(cueBallDist))
+  cueBall.position.copy(cueBallPos)
+
+  // Reference line sign: opposite side of cue ball
+  const objToCue = cueBallPos.clone().sub(objectBallPos).normalize()
+  currentSign = perpDir.dot(objToCue) > 0 ? -1 : 1
+  const refOffset = perpDir.clone().multiplyScalar(currentSign * BALL_RADIUS * 0.5)
+
+  // Update reference line geometry
+  const rStart = objectBallPos.clone().add(refOffset).add(objToPocket.clone().multiplyScalar(-40))
+  const rEnd = objectBallPos.clone().add(refOffset).add(objToPocket.clone().multiplyScalar(40))
+  refLineGeo.setFromPoints([
+    new THREE.Vector3(rStart.x, BALL_RADIUS, rStart.z),
+    new THREE.Vector3(rEnd.x, BALL_RADIUS, rEnd.z),
+  ])
+
+  // Update reference spot
+  const refOffsetDist = BALL_RADIUS * 0.5
+  const chordHalf = Math.sqrt(BALL_RADIUS * BALL_RADIUS - refOffsetDist * refOffsetDist)
+  const refSpotPos = objectBallPos.clone()
+    .add(perpDir.clone().multiplyScalar(currentSign * refOffsetDist))
+    .add(pocketToObj.clone().multiplyScalar(chordHalf))
+  refSpotPos.y = BALL_RADIUS
+  refSpot.position.copy(refSpotPos)
+
+  // Update ghost ref spot
+  const ghostRefSpotPos = ghostBallPos.clone()
+    .add(perpDir.clone().multiplyScalar(currentSign * refOffsetDist))
+    .add(pocketToObj.clone().multiplyScalar(chordHalf))
+  ghostRefSpotPos.y = BALL_RADIUS
+  ghostRefSpot.position.copy(ghostRefSpotPos)
+
+  // Update camera default position
+  defaultCamPos.copy(cueBallPos.clone().add(cueApproachDir.clone().multiplyScalar(8)))
+  defaultCamPos.y = 5
+
+  // Reset camera to shot line view
+  camera.position.copy(defaultCamPos)
+  controls.target.copy(defaultTarget)
+  controls.update()
+}
+
+// Initialize
+setCutAngle(30)
+
+// === UI Button Styles ===
+const btnStyle = {
+  padding: '12px 20px',
+  fontSize: '16px',
+  background: 'rgba(255,255,255,0.15)',
+  color: '#fff',
+  border: '1px solid rgba(255,255,255,0.3)',
+  borderRadius: '8px',
+  backdropFilter: 'blur(8px)',
+  cursor: 'pointer',
+  zIndex: '100',
+  touchAction: 'manipulation',
+}
+
+// === Cut Angle Selector ===
+const angles = [10, 30, 45, 75]
+const angleContainer = document.createElement('div')
+Object.assign(angleContainer.style, {
+  position: 'fixed',
+  top: '20px',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  display: 'flex',
+  gap: '6px',
+  zIndex: '100',
+})
+document.body.appendChild(angleContainer)
+
+const angleBtns = angles.map(deg => {
+  const btn = document.createElement('button')
+  btn.textContent = `${deg}\u00B0`
+  Object.assign(btn.style, {
+    ...btnStyle,
+    padding: '10px 16px',
+    fontSize: '15px',
+  })
+  btn.addEventListener('click', () => {
+    setCutAngle(deg)
+    updateAngleBtnStyles()
+  })
+  angleContainer.appendChild(btn)
+  return { btn, deg }
+})
+
+function updateAngleBtnStyles() {
+  angleBtns.forEach(({ btn, deg }) => {
+    if (deg === currentAngle) {
+      btn.style.background = 'rgba(255,255,255,0.4)'
+      btn.style.borderColor = '#fff'
+    } else {
+      btn.style.background = 'rgba(255,255,255,0.15)'
+      btn.style.borderColor = 'rgba(255,255,255,0.3)'
+    }
+  })
+}
+updateAngleBtnStyles()
+
+// === Ghost Ref Spot Toggle ===
+const ghostRefSpotBtn = document.createElement('button')
+ghostRefSpotBtn.textContent = 'Ghost Spot: ON'
+Object.assign(ghostRefSpotBtn.style, {
+  ...btnStyle,
+  position: 'fixed',
+  bottom: '220px',
+  right: '20px',
+})
+document.body.appendChild(ghostRefSpotBtn)
+
+ghostRefSpotBtn.addEventListener('click', () => {
+  ghostRefSpot.visible = !ghostRefSpot.visible
+  ghostRefSpotBtn.textContent = `Ghost Spot: ${ghostRefSpot.visible ? 'ON' : 'OFF'}`
+  ghostRefSpotBtn.style.opacity = ghostRefSpot.visible ? '1' : '0.5'
+})
+
+// === Reference Spot Toggle ===
+const refSpotBtn = document.createElement('button')
+refSpotBtn.textContent = 'Ref Spot: ON'
+Object.assign(refSpotBtn.style, {
+  ...btnStyle,
+  position: 'fixed',
+  bottom: '170px',
+  right: '20px',
+})
+document.body.appendChild(refSpotBtn)
+
+refSpotBtn.addEventListener('click', () => {
+  refSpot.visible = !refSpot.visible
+  refSpotBtn.textContent = `Ref Spot: ${refSpot.visible ? 'ON' : 'OFF'}`
+  refSpotBtn.style.opacity = refSpot.visible ? '1' : '0.5'
+})
+
+// === Reference Line Toggle ===
+const refLineBtn = document.createElement('button')
+refLineBtn.textContent = 'Ref Line: ON'
+Object.assign(refLineBtn.style, {
+  ...btnStyle,
+  position: 'fixed',
+  bottom: '120px',
+  right: '20px',
+})
+document.body.appendChild(refLineBtn)
+
+refLineBtn.addEventListener('click', () => {
+  refLine.visible = !refLine.visible
+  refLineBtn.textContent = `Ref Line: ${refLine.visible ? 'ON' : 'OFF'}`
+  refLineBtn.style.opacity = refLine.visible ? '1' : '0.5'
+})
+
+// === Pocket Line Toggle ===
+const pocketLineBtn = document.createElement('button')
+pocketLineBtn.textContent = 'Pocket Line: ON'
+Object.assign(pocketLineBtn.style, {
+  ...btnStyle,
+  position: 'fixed',
+  bottom: '70px',
+  right: '20px',
+})
+document.body.appendChild(pocketLineBtn)
+
+pocketLineBtn.addEventListener('click', () => {
+  pocketLine.visible = !pocketLine.visible
+  pocketLineBtn.textContent = `Pocket Line: ${pocketLine.visible ? 'ON' : 'OFF'}`
+  pocketLineBtn.style.opacity = pocketLine.visible ? '1' : '0.5'
+})
+
+// === Reset Button ===
+const resetBtn = document.createElement('button')
+resetBtn.textContent = 'Reset View'
+Object.assign(resetBtn.style, {
+  ...btnStyle,
+  position: 'fixed',
+  bottom: '20px',
+  right: '20px',
+})
+document.body.appendChild(resetBtn)
+
+resetBtn.addEventListener('click', () => {
+  const startPos = camera.position.clone()
+  const startTarget = controls.target.clone()
+  const duration = 400
+  const startTime = performance.now()
+
+  function animateReset(now) {
+    const t = Math.min((now - startTime) / duration, 1)
+    const ease = t * (2 - t)
+    camera.position.lerpVectors(startPos, defaultCamPos, ease)
+    controls.target.lerpVectors(startTarget, defaultTarget, ease)
+    controls.update()
+    if (t < 1) requestAnimationFrame(animateReset)
+  }
+  requestAnimationFrame(animateReset)
+})
+
+// === Render Loop ===
+function animate() {
+  requestAnimationFrame(animate)
+  controls.update()
+  renderer.render(scene, camera)
+}
+animate()
+
+// === Resize ===
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(window.innerWidth, window.innerHeight)
+})
