@@ -183,8 +183,9 @@ let currentAngle = 30
 const cueBallDist = 15
 const defaultCamPos = new THREE.Vector3()
 const defaultTarget = ghostBallPos.clone()
+let refLinePercent = 25
 
-function setCutAngle(deg) {
+function setCutAngle(deg, { resetCamera = true } = {}) {
   currentAngle = deg
   const cutAngleRad = (deg * Math.PI) / 180
 
@@ -197,7 +198,7 @@ function setCutAngle(deg) {
   // Reference line sign: opposite side of cue ball
   const objToCue = cueBallPos.clone().sub(objectBallPos).normalize()
   currentSign = perpDir.dot(objToCue) > 0 ? -1 : 1
-  const refOffset = perpDir.clone().multiplyScalar(currentSign * BALL_RADIUS * 0.5)
+  const refOffset = perpDir.clone().multiplyScalar(currentSign * BALL_RADIUS * refLinePercent / 50)
 
   // Update reference line geometry
   const rStart = objectBallPos.clone().add(refOffset).add(objToPocket.clone().multiplyScalar(-40))
@@ -205,7 +206,7 @@ function setCutAngle(deg) {
   refLineGeo.setPositions([rStart.x, lineHeight, rStart.z, rEnd.x, lineHeight, rEnd.z])
 
   // Update reference spot
-  const refOffsetDist = BALL_RADIUS * 0.5
+  const refOffsetDist = BALL_RADIUS * refLinePercent / 50
   const chordHalf = Math.sqrt(BALL_RADIUS * BALL_RADIUS - refOffsetDist * refOffsetDist)
   const refSpotPos = objectBallPos.clone()
     .add(perpDir.clone().multiplyScalar(currentSign * refOffsetDist))
@@ -225,9 +226,11 @@ function setCutAngle(deg) {
   defaultCamPos.y = 5
 
   // Reset camera to shot line view
-  camera.position.copy(defaultCamPos)
-  controls.target.copy(defaultTarget)
-  controls.update()
+  if (resetCamera) {
+    camera.position.copy(defaultCamPos)
+    controls.target.copy(defaultTarget)
+    controls.update()
+  }
 }
 
 // Initialize
@@ -299,7 +302,7 @@ ghostBallBtn.textContent = 'Ghost: Solid'
 Object.assign(ghostBallBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '320px',
+  bottom: '370px',
   right: '20px',
 })
 document.body.appendChild(ghostBallBtn)
@@ -335,7 +338,7 @@ ghostRefSpotBtn.style.opacity = '0.5'
 Object.assign(ghostRefSpotBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '270px',
+  bottom: '320px',
   right: '20px',
 })
 document.body.appendChild(ghostRefSpotBtn)
@@ -353,7 +356,7 @@ refSpotBtn.style.opacity = '0.5'
 Object.assign(refSpotBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '220px',
+  bottom: '270px',
   right: '20px',
 })
 document.body.appendChild(refSpotBtn)
@@ -370,7 +373,7 @@ refLineBtn.textContent = 'Ref Line: ON'
 Object.assign(refLineBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '170px',
+  bottom: '220px',
   right: '20px',
 })
 document.body.appendChild(refLineBtn)
@@ -379,6 +382,47 @@ refLineBtn.addEventListener('click', () => {
   refLine.visible = !refLine.visible
   refLineBtn.textContent = `Ref Line: ${refLine.visible ? 'ON' : 'OFF'}`
   refLineBtn.style.opacity = refLine.visible ? '1' : '0.5'
+  refSliderWrap.style.display = refLine.visible ? 'flex' : 'none'
+})
+
+// === Reference Line Offset Slider ===
+const refSliderWrap = document.createElement('div')
+Object.assign(refSliderWrap.style, {
+  position: 'fixed',
+  bottom: '170px',
+  right: '20px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  zIndex: '100',
+})
+document.body.appendChild(refSliderWrap)
+
+const refSlider = document.createElement('input')
+refSlider.type = 'range'
+refSlider.min = '0'
+refSlider.max = '50'
+refSlider.value = '25'
+Object.assign(refSlider.style, {
+  width: '100px',
+  accentColor: '#ff4444',
+  touchAction: 'manipulation',
+})
+refSliderWrap.appendChild(refSlider)
+
+const refSliderLabel = document.createElement('span')
+refSliderLabel.textContent = '25%'
+Object.assign(refSliderLabel.style, {
+  color: '#fff',
+  fontSize: '14px',
+  minWidth: '36px',
+})
+refSliderWrap.appendChild(refSliderLabel)
+
+refSlider.addEventListener('input', () => {
+  refLinePercent = Number(refSlider.value)
+  refSliderLabel.textContent = `${refLinePercent}%`
+  setCutAngle(currentAngle, { resetCamera: false })
 })
 
 // === Pocket Line Toggle ===
@@ -428,7 +472,7 @@ lineHeightBtn.addEventListener('click', () => {
   lineHeight = lineHeightModes[lineHeightIndex].height
   lineHeightBtn.textContent = lineHeightModes[lineHeightIndex].label
   updatePocketLineHeight()
-  setCutAngle(currentAngle)
+  setCutAngle(currentAngle, { resetCamera: false })
 })
 
 // === Reset Button ===
