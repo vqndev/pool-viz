@@ -416,14 +416,17 @@ function updatePocketLineHeight() {
   ])
 }
 
+const lineHeightModes = [
+  { height: BALL_RADIUS, label: 'Lines: Mid-Air' },
+  { height: 0.15, label: 'Lines: Base' },
+  { height: 0.02, label: 'Lines: Table' },
+]
+let lineHeightIndex = 0
+
 lineHeightBtn.addEventListener('click', () => {
-  if (lineHeight < 0.1) {
-    lineHeight = BALL_RADIUS
-    lineHeightBtn.textContent = 'Lines: Mid-Air'
-  } else {
-    lineHeight = 0.02
-    lineHeightBtn.textContent = 'Lines: Table'
-  }
+  lineHeightIndex = (lineHeightIndex + 1) % lineHeightModes.length
+  lineHeight = lineHeightModes[lineHeightIndex].height
+  lineHeightBtn.textContent = lineHeightModes[lineHeightIndex].label
   updatePocketLineHeight()
   setCutAngle(currentAngle)
 })
