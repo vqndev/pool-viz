@@ -13,22 +13,44 @@ const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerH
 const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
 document.body.appendChild(renderer.domElement)
 
-// === Lighting ===
-scene.add(new THREE.AmbientLight(0xffffff, 0.6))
-const overheadLight = new THREE.PointLight(0xffffff, 1.2, 200)
-overheadLight.position.set(0, 30, 0)
-scene.add(overheadLight)
-
-// === Table Surface ===
+// === Table dimensions (declared early for lighting) ===
 const tableWidth = 30
 const tableLength = 40
+
+// === Lighting ===
+scene.add(new THREE.AmbientLight(0xffffff, 0.8))
+
+// Main overhead pool hall lamp
+const mainLight = new THREE.SpotLight(0xffe4b5, 10, 60, Math.PI / 4, 0.6, 1.2)
+mainLight.position.set(0, 14, -5)
+mainLight.target.position.set(0, 0, -5)
+mainLight.castShadow = true
+scene.add(mainLight)
+scene.add(mainLight.target)
+
+// Second spot from the other side
+const secondSpot = new THREE.SpotLight(0xfff0d0, 5, 50, Math.PI / 5, 0.7, 1.2)
+secondSpot.position.set(-5, 12, 5)
+secondSpot.target.position.set(3, 0, -8)
+scene.add(secondSpot)
+scene.add(secondSpot.target)
+
+// Rim light near the pocket
+const rimLight = new THREE.PointLight(0xffd080, 0.5, 30)
+rimLight.position.set(tableWidth / 2 - 1, 3, -tableLength / 2 + 1)
+scene.add(rimLight)
+
+// === Table Surface ===
 const table = new THREE.Mesh(
   new THREE.PlaneGeometry(tableWidth, tableLength),
   new THREE.MeshStandardMaterial({ color: 0x0d6b3d })
 )
 table.rotation.x = -Math.PI / 2
+table.receiveShadow = true
 scene.add(table)
 
 // === Cushions ===
@@ -68,6 +90,7 @@ const objectBall = new THREE.Mesh(
   new THREE.MeshStandardMaterial({ color: 0xf5c518, roughness: 0.3, metalness: 0.1 })
 )
 objectBall.position.copy(objectBallPos)
+objectBall.castShadow = true
 scene.add(objectBall)
 
 // === Ghost Ball (fixed) ===
@@ -90,6 +113,7 @@ const cueBall = new THREE.Mesh(
   new THREE.SphereGeometry(BALL_RADIUS, 32, 32),
   new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.2, metalness: 0.05 })
 )
+cueBall.castShadow = true
 scene.add(cueBall)
 
 // === Pocket Line (fixed - object ball to pocket) ===
