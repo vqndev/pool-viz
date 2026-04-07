@@ -102,7 +102,7 @@ const ghostBall = new THREE.Mesh(
   new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
     transparent: true,
-    opacity: 0.15,
+    opacity: 0.45,
     roughness: 0.05,
     metalness: 0.0,
     clearcoat: 1.0,
@@ -132,7 +132,7 @@ cueBall.castShadow = true
 scene.add(cueBall)
 
 // === Line height (table vs mid-air) ===
-let lineHeight = BALL_RADIUS - Math.sqrt(BALL_RADIUS * BALL_RADIUS - (BALL_RADIUS * 25 / 50) ** 2) // base by default
+let lineHeight = BALL_RADIUS - Math.sqrt(BALL_RADIUS * BALL_RADIUS - (BALL_RADIUS * 35 / 50) ** 2) // base by default
 
 // === Pocket Line (fixed - object ball to pocket) ===
 const pocketLineGeo = new THREE.BufferGeometry().setFromPoints([
@@ -183,7 +183,7 @@ let currentAngle = 30
 const cueBallDist = 15
 const defaultCamPos = new THREE.Vector3()
 const defaultTarget = ghostBallPos.clone()
-let refLinePercent = 25
+let refLinePercent = 35
 
 function setCutAngle(deg, { resetCamera = true } = {}) {
   currentAngle = deg
@@ -222,7 +222,7 @@ function setCutAngle(deg, { resetCamera = true } = {}) {
   ghostRefSpot.position.copy(ghostRefSpotPos)
 
   // Update camera default position
-  defaultCamPos.copy(cueBallPos.clone().add(cueApproachDir.clone().multiplyScalar(8)))
+  defaultCamPos.copy(cueBallPos.clone().add(cueApproachDir.clone().multiplyScalar(12)))
   defaultCamPos.y = 5
 
   // Reset camera to shot line view
@@ -302,7 +302,7 @@ ghostBallBtn.textContent = 'Ghost: Solid'
 Object.assign(ghostBallBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '370px',
+  bottom: '420px',
   right: '20px',
 })
 document.body.appendChild(ghostBallBtn)
@@ -338,7 +338,7 @@ ghostRefSpotBtn.style.opacity = '0.5'
 Object.assign(ghostRefSpotBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '320px',
+  bottom: '370px',
   right: '20px',
 })
 document.body.appendChild(ghostRefSpotBtn)
@@ -356,7 +356,7 @@ refSpotBtn.style.opacity = '0.5'
 Object.assign(refSpotBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '270px',
+  bottom: '320px',
   right: '20px',
 })
 document.body.appendChild(refSpotBtn)
@@ -373,7 +373,7 @@ refLineBtn.textContent = 'Ref Line: ON'
 Object.assign(refLineBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '220px',
+  bottom: '270px',
   right: '20px',
 })
 document.body.appendChild(refLineBtn)
@@ -389,7 +389,7 @@ refLineBtn.addEventListener('click', () => {
 const refSliderWrap = document.createElement('div')
 Object.assign(refSliderWrap.style, {
   position: 'fixed',
-  bottom: '170px',
+  bottom: '220px',
   right: '20px',
   display: 'flex',
   alignItems: 'center',
@@ -402,7 +402,7 @@ const refSlider = document.createElement('input')
 refSlider.type = 'range'
 refSlider.min = '0'
 refSlider.max = '50'
-refSlider.value = '25'
+refSlider.value = '35'
 Object.assign(refSlider.style, {
   width: '100px',
   accentColor: '#ff4444',
@@ -411,7 +411,7 @@ Object.assign(refSlider.style, {
 refSliderWrap.appendChild(refSlider)
 
 const refSliderLabel = document.createElement('span')
-refSliderLabel.textContent = '25%'
+refSliderLabel.textContent = '35%'
 Object.assign(refSliderLabel.style, {
   color: '#fff',
   fontSize: '14px',
@@ -435,7 +435,7 @@ pocketLineBtn.textContent = 'Pocket Line: ON'
 Object.assign(pocketLineBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '120px',
+  bottom: '170px',
   right: '20px',
 })
 document.body.appendChild(pocketLineBtn)
@@ -452,7 +452,7 @@ lineHeightBtn.textContent = 'Lines: Base'
 Object.assign(lineHeightBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '70px',
+  bottom: '120px',
   right: '20px',
 })
 document.body.appendChild(lineHeightBtn)
@@ -483,32 +483,72 @@ lineHeightBtn.addEventListener('click', () => {
   setCutAngle(currentAngle, { resetCamera: false })
 })
 
-// === Reset Button ===
-const resetBtn = document.createElement('button')
-resetBtn.textContent = 'Reset View'
-Object.assign(resetBtn.style, {
+// === Animation Speed Toggle ===
+const speedModes = [
+  { label: 'Slow', duration: 3000 },
+  { label: 'Medium', duration: 400 },
+  { label: 'Fast', duration: 150 },
+]
+let speedIndex = 0
+
+const speedBtn = document.createElement('button')
+speedBtn.textContent = 'Speed: Slow'
+Object.assign(speedBtn.style, {
+  ...btnStyle,
+  position: 'fixed',
+  bottom: '70px',
+  right: '20px',
+})
+document.body.appendChild(speedBtn)
+
+speedBtn.addEventListener('click', () => {
+  speedIndex = (speedIndex + 1) % speedModes.length
+  speedBtn.textContent = `Speed: ${speedModes[speedIndex].label}`
+})
+
+// === View Toggle Button ===
+const viewModes = ['Shot Line', 'Pocket Line']
+let viewModeIndex = 0
+
+const viewBtn = document.createElement('button')
+viewBtn.textContent = 'View: Shot Line'
+Object.assign(viewBtn.style, {
   ...btnStyle,
   position: 'fixed',
   bottom: '20px',
   right: '20px',
 })
-document.body.appendChild(resetBtn)
+document.body.appendChild(viewBtn)
 
-resetBtn.addEventListener('click', () => {
+function getViewTarget() {
+  if (viewModes[viewModeIndex] === 'Shot Line') {
+    return { pos: defaultCamPos.clone(), target: defaultTarget.clone() }
+  }
+  // Pocket Line: behind ghost ball, looking toward pocket
+  const pos = ghostBallPos.clone().add(pocketToObj.clone().multiplyScalar(25))
+  pos.y = 6
+  return { pos, target: objectBallPos.clone() }
+}
+
+viewBtn.addEventListener('click', () => {
+  viewModeIndex = (viewModeIndex + 1) % viewModes.length
+  viewBtn.textContent = `View: ${viewModes[viewModeIndex]}`
+
+  const { pos: endPos, target: endTarget } = getViewTarget()
   const startPos = camera.position.clone()
   const startTarget = controls.target.clone()
-  const duration = 400
+  const duration = speedModes[speedIndex].duration
   const startTime = performance.now()
 
-  function animateReset(now) {
+  function animateView(now) {
     const t = Math.min((now - startTime) / duration, 1)
     const ease = t * (2 - t)
-    camera.position.lerpVectors(startPos, defaultCamPos, ease)
-    controls.target.lerpVectors(startTarget, defaultTarget, ease)
+    camera.position.lerpVectors(startPos, endPos, ease)
+    controls.target.lerpVectors(startTarget, endTarget, ease)
     controls.update()
-    if (t < 1) requestAnimationFrame(animateReset)
+    if (t < 1) requestAnimationFrame(animateView)
   }
-  requestAnimationFrame(animateReset)
+  requestAnimationFrame(animateView)
 })
 
 // === Render Loop ===
