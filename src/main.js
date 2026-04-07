@@ -99,14 +99,26 @@ scene.add(objectBall)
 // === Ghost Ball (fixed) ===
 const ghostBall = new THREE.Mesh(
   new THREE.SphereGeometry(BALL_RADIUS, 32, 32),
-  new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.175, roughness: 0.1, depthWrite: false })
+  new THREE.MeshPhysicalMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.15,
+    roughness: 0.05,
+    metalness: 0.0,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.1,
+    ior: 1.5,
+    thickness: 2,
+    transmission: 0.6,
+    depthWrite: false,
+  })
 )
 ghostBall.position.copy(ghostBallPos)
 scene.add(ghostBall)
 
 const ghostWire = new THREE.Mesh(
   new THREE.SphereGeometry(BALL_RADIUS * 1.005, 16, 16),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.2 })
+  new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.14 })
 )
 ghostWire.position.copy(ghostBallPos)
 scene.add(ghostWire)
@@ -118,6 +130,9 @@ const cueBall = new THREE.Mesh(
 )
 cueBall.castShadow = true
 scene.add(cueBall)
+
+// === Line height (table vs mid-air) ===
+let lineHeight = BALL_RADIUS // mid-air by default
 
 // === Pocket Line (fixed - object ball to pocket) ===
 const pocketLineGeo = new THREE.BufferGeometry().setFromPoints([
@@ -187,7 +202,7 @@ function setCutAngle(deg) {
   // Update reference line geometry
   const rStart = objectBallPos.clone().add(refOffset).add(objToPocket.clone().multiplyScalar(-40))
   const rEnd = objectBallPos.clone().add(refOffset).add(objToPocket.clone().multiplyScalar(40))
-  refLineGeo.setPositions([rStart.x, BALL_RADIUS, rStart.z, rEnd.x, BALL_RADIUS, rEnd.z])
+  refLineGeo.setPositions([rStart.x, lineHeight, rStart.z, rEnd.x, lineHeight, rEnd.z])
 
   // Update reference spot
   const refOffsetDist = BALL_RADIUS * 0.5
@@ -275,23 +290,42 @@ function updateAngleBtnStyles() {
 }
 updateAngleBtnStyles()
 
-// === Ghost Ball Toggle ===
+// === Ghost Ball Toggle (cycles: Wire -> Solid -> OFF) ===
+const ghostModes = ['Wire', 'Solid', 'OFF']
+let ghostModeIndex = 1
+
 const ghostBallBtn = document.createElement('button')
-ghostBallBtn.textContent = 'Ghost Ball: ON'
+ghostBallBtn.textContent = 'Ghost: Solid'
 Object.assign(ghostBallBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '270px',
+  bottom: '320px',
   right: '20px',
 })
 document.body.appendChild(ghostBallBtn)
 
+function applyGhostMode() {
+  const mode = ghostModes[ghostModeIndex]
+  if (mode === 'Wire') {
+    ghostBall.visible = false
+    ghostWire.visible = true
+    ghostBallBtn.style.opacity = '1'
+  } else if (mode === 'Solid') {
+    ghostBall.visible = true
+    ghostWire.visible = false
+    ghostBallBtn.style.opacity = '1'
+  } else {
+    ghostBall.visible = false
+    ghostWire.visible = false
+    ghostBallBtn.style.opacity = '0.5'
+  }
+  ghostBallBtn.textContent = `Ghost: ${mode}`
+}
+applyGhostMode()
+
 ghostBallBtn.addEventListener('click', () => {
-  const on = !ghostBall.visible
-  ghostBall.visible = on
-  ghostWire.visible = on
-  ghostBallBtn.textContent = `Ghost Ball: ${on ? 'ON' : 'OFF'}`
-  ghostBallBtn.style.opacity = on ? '1' : '0.5'
+  ghostModeIndex = (ghostModeIndex + 1) % ghostModes.length
+  applyGhostMode()
 })
 
 // === Ghost Ref Spot Toggle ===
@@ -301,7 +335,7 @@ ghostRefSpotBtn.style.opacity = '0.5'
 Object.assign(ghostRefSpotBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '220px',
+  bottom: '270px',
   right: '20px',
 })
 document.body.appendChild(ghostRefSpotBtn)
@@ -319,7 +353,7 @@ refSpotBtn.style.opacity = '0.5'
 Object.assign(refSpotBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '170px',
+  bottom: '220px',
   right: '20px',
 })
 document.body.appendChild(refSpotBtn)
@@ -336,7 +370,7 @@ refLineBtn.textContent = 'Ref Line: ON'
 Object.assign(refLineBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '120px',
+  bottom: '170px',
   right: '20px',
 })
 document.body.appendChild(refLineBtn)
@@ -353,7 +387,7 @@ pocketLineBtn.textContent = 'Pocket Line: ON'
 Object.assign(pocketLineBtn.style, {
   ...btnStyle,
   position: 'fixed',
-  bottom: '70px',
+  bottom: '120px',
   right: '20px',
 })
 document.body.appendChild(pocketLineBtn)
@@ -362,6 +396,36 @@ pocketLineBtn.addEventListener('click', () => {
   pocketLine.visible = !pocketLine.visible
   pocketLineBtn.textContent = `Pocket Line: ${pocketLine.visible ? 'ON' : 'OFF'}`
   pocketLineBtn.style.opacity = pocketLine.visible ? '1' : '0.5'
+})
+
+// === Line Height Toggle ===
+const lineHeightBtn = document.createElement('button')
+lineHeightBtn.textContent = 'Lines: Mid-Air'
+Object.assign(lineHeightBtn.style, {
+  ...btnStyle,
+  position: 'fixed',
+  bottom: '70px',
+  right: '20px',
+})
+document.body.appendChild(lineHeightBtn)
+
+function updatePocketLineHeight() {
+  pocketLineGeo.setFromPoints([
+    new THREE.Vector3(objectBallPos.x + objToPocket.x * -40, lineHeight, objectBallPos.z + objToPocket.z * -40),
+    new THREE.Vector3(objectBallPos.x + objToPocket.x * 40, lineHeight, objectBallPos.z + objToPocket.z * 40),
+  ])
+}
+
+lineHeightBtn.addEventListener('click', () => {
+  if (lineHeight < 0.1) {
+    lineHeight = BALL_RADIUS
+    lineHeightBtn.textContent = 'Lines: Mid-Air'
+  } else {
+    lineHeight = 0.02
+    lineHeightBtn.textContent = 'Lines: Table'
+  }
+  updatePocketLineHeight()
+  setCutAngle(currentAngle)
 })
 
 // === Reset Button ===
