@@ -132,7 +132,7 @@ cueBall.castShadow = true
 scene.add(cueBall)
 
 // === Line height (table vs mid-air) ===
-let lineHeight = BALL_RADIUS // mid-air by default
+let lineHeight = BALL_RADIUS - Math.sqrt(BALL_RADIUS * BALL_RADIUS - (BALL_RADIUS * 25 / 50) ** 2) // base by default
 
 // === Pocket Line (fixed - object ball to pocket) ===
 const pocketLineGeo = new THREE.BufferGeometry().setFromPoints([
@@ -422,6 +422,10 @@ refSliderWrap.appendChild(refSliderLabel)
 refSlider.addEventListener('input', () => {
   refLinePercent = Number(refSlider.value)
   refSliderLabel.textContent = `${refLinePercent}%`
+  if (lineHeightModes[lineHeightIndex] === 'Base') {
+    lineHeight = getLineHeight('Base')
+    updatePocketLineHeight()
+  }
   setCutAngle(currentAngle, { resetCamera: false })
 })
 
@@ -444,7 +448,7 @@ pocketLineBtn.addEventListener('click', () => {
 
 // === Line Height Toggle ===
 const lineHeightBtn = document.createElement('button')
-lineHeightBtn.textContent = 'Lines: Mid-Air'
+lineHeightBtn.textContent = 'Lines: Base'
 Object.assign(lineHeightBtn.style, {
   ...btnStyle,
   position: 'fixed',
@@ -460,17 +464,21 @@ function updatePocketLineHeight() {
   ])
 }
 
-const lineHeightModes = [
-  { height: BALL_RADIUS, label: 'Lines: Mid-Air' },
-  { height: 0.15, label: 'Lines: Base' },
-  { height: 0.02, label: 'Lines: Table' },
-]
-let lineHeightIndex = 0
+const lineHeightModes = ['Mid-Air', 'Base', 'Table']
+let lineHeightIndex = 1
+
+function getLineHeight(mode) {
+  if (mode === 'Mid-Air') return BALL_RADIUS
+  if (mode === 'Table') return 0.02
+  // Base: bottom of ball at current offset
+  const offsetDist = BALL_RADIUS * refLinePercent / 50
+  return BALL_RADIUS - Math.sqrt(BALL_RADIUS * BALL_RADIUS - offsetDist * offsetDist)
+}
 
 lineHeightBtn.addEventListener('click', () => {
   lineHeightIndex = (lineHeightIndex + 1) % lineHeightModes.length
-  lineHeight = lineHeightModes[lineHeightIndex].height
-  lineHeightBtn.textContent = lineHeightModes[lineHeightIndex].label
+  lineHeight = getLineHeight(lineHeightModes[lineHeightIndex])
+  lineHeightBtn.textContent = `Lines: ${lineHeightModes[lineHeightIndex]}`
   updatePocketLineHeight()
   setCutAngle(currentAngle, { resetCamera: false })
 })
